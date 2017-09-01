@@ -5,7 +5,9 @@ var _ = require('lodash');
  * 构造函数
  */
 function Scope() {
-    this.$$watchers = [];
+    this.$$watchers = [];                   // 所有的watcher组成的数组
+    this.$$lastDirtyWatch = null;           // 一次digestOnce循环的最有一个脏watcher
+    this.$$asyncQueue = [];                 // 异步队列
 }
 
 // 初始化值
@@ -14,31 +16,107 @@ function initWatchVal() {}
 /**
  * $watch方法：观测数据 
  */
-Scope.prototype.$watch = function(watchFn, listenFn) {
+Scope.prototype.$watch = function(watchFn, listenFn, valueEq) {
     // watcher：新建的watcher
     var watcher = {
         watchFn: watchFn,
-        listenFn: listenFn,
+        listenFn: listenFn || function() {},
+        valueEq: !!valueEq,
         last: initWatchVal
     };
     // $$watchers：所有的watcher组成的数组
     this.$$watchers.push(watcher);
+    // 每次watch新值都要将lastDirtyWatch置为null
+    this.$$lastDirtyWatch = null;
 };
 
 /**
- * $digest：执行变更
+ * $digestOnce：执行变更
  */
-Scope.prototype.$digest = function() {
+Scope.prototype.$digestOnce = function() {
     var self = this;
-    var newValue, oldValue;
+    var newValue, oldValue, dirty;
     // 对每个watcher检查新旧值
     _.forEach(this.$$watchers, function(watcher) {
         newValue = watcher.watchFn(self);
         oldValue = watcher.last;
-        if(newValue !== oldValue) {
-            watcher.last = newValue;
+        if(!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+            self.$$lastDirtyWatch = watcher;
+            // 将新值赋给last，供下次改变调用
+            watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue;
             watcher.listenFn(newValue, oldValue===initWatchVal?newValue:oldValue, self);
+            dirty = true;
+        } else if(self.$$lastDirtyWatch === watcher) {
+            // 当这个watcher此次循环中是clean的，且是上次循环中的最后一个dirty watch
+            return false;
         }
     });
+    return dirty;
+};
+
+/**
+ * 正儿八经的$digest
+ */
+Scope.prototype.$digest = function() {
+    var dirty;
+    var TTL = 10;
+    // 开始digest循环初始化$$lastDirtyWatch
+    this.$$lastDirtyWatch = null;
+    // 先执行再判断
+    do {
+        // 如果异步队列中有值，将第一个元素删除并返回第一个值
+        // todo: 为什么异步执行
+        while (this.$$asyncQueue.length > 0) {
+            var asyncTask = this.$$asyncQueue.shift();
+            asyncTask.scope.$eval(asyncTask.func);
+        }
+        dirty = this.$digestOnce();
+        // 10次循环后抛出错误
+        if(dirty && !(TTL--)){
+            throw('over 10 times digest cycle');
+        }
+    } while (dirty);
+};
+
+/**
+ * 比较两个值是否相同
+ * valueEq是如果是比较数组或对象时，要传true
+ */
+Scope.prototype.$$areEqual = function(newValue, oldValue, valueEq) {
+    if (valueEq) {
+        return _.isEqual(newValue, oldValue);
+    } else {
+        // 两者相等或者都是NaN时都返回true
+        return newValue === oldValue ||
+        (typeof newValue === 'number' && typeof oldValue === 'number' && isNaN(newValue) && isNaN(oldValue));
+    }
+};
+
+/**
+ * $eval方法，再scope的上下文上执行函数表达式
+ */
+Scope.prototype.$eval = function(func, locals) {
+    return func(this, locals);
+};
+
+/**
+ * $apply方法：用来把代码推到Ng的生命周期
+ * 使用$eval方法执行函数表达式
+ * 最后执行digest循环
+ */
+Scope.prototype.$apply = function(func) {
+    try {
+        return this.$eval(func);
+    } finally {
+        // 即使try中语句报错，也要执行digest循环
+        this.$digest();
+    }
+};
+
+/**
+ * $evalAsync方法：推迟执行
+ */
+Scope.prototype.$evalAsync = function(func) {
+    this.$$asyncQueue.push({scope: this, func: func});
 };
 module.exports = Scope;
