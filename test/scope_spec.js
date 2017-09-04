@@ -258,6 +258,40 @@ describe('digest', function() {
         expect(scope.asyncEvaluated).toBe(true);
     });
 
+    it('当所有的watch都是clean时执行evalAsync', function() {
+        scope.aValue = 'a';
+        scope.asyncTimes = 0;
+
+        scope.$watch(
+            function(scope) { 
+                if(scope.asyncTimes < 2) {
+                    scope.$evalAsync(function(scope) {
+                        scope.asyncTimes++;                        
+                    });
+                }
+                return scope.aValue;
+            },
+            function(newVal, oldVal, scope) {}
+        );
+
+        scope.$digest();
+        expect(scope.asyncTimes).toBe(2);
+    });
+
+    it('evalAsync在watcher中超过10次抛出', function() {
+        scope.aValue = 'a';
+        scope.counter = 0;
+        scope.$watch(
+            function(scope) {
+                scope.$evalAsync(function(scope) {
+                    scope.counter++;
+                });
+                return scope.aValue;
+            }
+        );
+        expect(function(){scope.$digest();}).toThrow();
+    });
+
     it('在watchFn中catch到错误并继续', function() {
         scope.aValue = 'a';
         scope.counter = 0;
@@ -403,5 +437,84 @@ describe('digest', function() {
 
         scope.$digest();
         expect(scope.counter).toBe(0);
+    });
+
+    it('$$phase字段显示状态信息', function() {
+        scope.aValue = [1, 2, 3];
+        scope.phaseInWatchFunc = undefined;
+        scope.phaseInListenerFunc = undefined;
+        scope.phaseInApplyFunc = undefined;
+
+        scope.$watch(
+            function(scope) {
+                scope.phaseInWatchFunc = scope.$$phase;
+                return scope.aValue;
+            },
+            function(newVal, oldVal, scope) {
+                scope.phaseInListenerFunc = scope.$$phase;
+            }
+        );
+
+        scope.$apply(function(scope){
+            scope.phaseInApplyFunc = scope.$$phase;
+        });
+        expect(scope.phaseInWatchFunc).toBe('$digest');
+        expect(scope.phaseInListenerFunc).toBe('$digest');
+        expect(scope.phaseInApplyFunc).toBe('$apply');
+    });
+});
+
+describe('evalAsync', function() {
+    var scope;
+    beforeEach(function() {
+        scope = new Scope();
+    });
+
+    it('通过$evalAsync安排一个digest循环', function(done) {
+        scope.aValue = 'abc';
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$evalAsync(function(){});
+        expect(scope.counter).toBe(0);
+        setTimeout(function() {
+            expect(scope.counter).toBe(1);
+            done();
+        }, 50);
+    });
+});
+
+describe('applyAsync', function() {
+    var scope;
+    beforeEach(function() {
+        scope = new Scope();
+    });
+    it('通过$applyAsync异步执行apply', function(done) {
+        scope.aValue = 'abc';
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+        scope.$applyAsync(function(){
+            scope.aValue = 'jhk';
+        });
+        expect(scope.counter).toBe(1);
+        setTimeout(function(){
+            expect(scope.counter).toBe(2);
+            done();
+        }, 50);
     });
 });

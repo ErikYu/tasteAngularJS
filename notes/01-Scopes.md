@@ -45,4 +45,16 @@
     - setTimeOut() 
     - $timeout service, to integrates the funtion to the digest cycle by $apply()
     - $evalAsync, take a function as argument. But still in the current digest cycle
-    
+
+## Scheduling $evalAsync from Watch Functions
+1. Schedule a $evalAsync() in a watch function which is not advised but possible;
+2. In digest(), while dirty and **$$asyncQueue.length**, the digestInce() shoulb be executed;
+
+## Scope Phases
+1. $evalAsync() does schedule a digest. That means whenever you calls a $evalAsync, the code you are deferring is going to be invoked very soon instead of waiting something else to trigger a digest;
+2. Add phases: $digest, $apply, null;
+3. If you call $evalAsync when a digest is already running, your function will be evaluated during 
+that digest. If there is no digest running, one is started.
+
+## $applyAsync - Coalescing(合并) $apply invocations
+1. 

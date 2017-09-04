@@ -8,6 +8,8 @@ function Scope() {
     this.$$watchers = [];                   // 所有的watcher组成的数组
     this.$$lastDirtyWatch = null;           // 一次digestOnce循环的最有一个脏watcher
     this.$$asyncQueue = [];                 // 异步队列
+    this.$$applyAsyncQueue = [];            // 
+    this.$$phase = null;
 }
 
 // 初始化值
@@ -78,6 +80,8 @@ Scope.prototype.$digestOnce = function() {
 Scope.prototype.$digest = function() {
     var dirty;
     var TTL = 10;
+    // 开始digest循环给phase赋值‘digest’
+    this.$beginPhase('$digest');
     // 开始digest循环初始化$$lastDirtyWatch
     this.$$lastDirtyWatch = null;
     // 先执行再判断
@@ -90,10 +94,12 @@ Scope.prototype.$digest = function() {
         }
         dirty = this.$digestOnce();
         // 10次循环后抛出错误
-        if(dirty && !(TTL--)){
+        if((dirty || this.$$asyncQueue.length) && !(TTL--)){
+            this.$clearPhase();
             throw('over 10 times digest cycle');
         }
-    } while (dirty);
+    } while (dirty || this.$$asyncQueue.length);
+    this.$clearPhase();
 };
 
 /**
@@ -124,17 +130,48 @@ Scope.prototype.$eval = function(func, locals) {
  */
 Scope.prototype.$apply = function(func) {
     try {
+        this.$beginPhase('$apply');
         return this.$eval(func);
     } finally {
+        this.$clearPhase();
         // 即使try中语句报错，也要执行digest循环
         this.$digest();
     }
 };
 
 /**
- * $evalAsync方法：推迟执行
+ * $evalAsync方法：推迟执行函数
  */
 Scope.prototype.$evalAsync = function(func) {
+    // digest
+    var self = this;
+    // 不在digest循环中且异步队列中没有元素
+    if (!this.$$phase && !this.$$asyncQueue.length) {
+        setTimeout(function() {
+            if (self.$$asyncQueue.length) {
+                self.$digest();
+            }
+        }, 0);
+    }
+    // 将需要推迟执行的方法推到异步队列
     this.$$asyncQueue.push({scope: this, func: func});
 };
+
+/**
+ * 新建和清除一个scope的phase状态值
+ */
+Scope.prototype.$beginPhase = function(phase) {
+    if (this.$$phase) {
+        throw this.$$phase + 'is in progess';
+    }
+    this.$$phase = phase;
+};
+Scope.prototype.$clearPhase = function() {
+    this.$$phase = null;
+};
+
+Scope.prototype.$applyAsync = function() {
+
+};
+
 module.exports = Scope;
