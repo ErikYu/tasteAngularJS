@@ -257,4 +257,151 @@ describe('digest', function() {
         scope.$digest();
         expect(scope.asyncEvaluated).toBe(true);
     });
+
+    it('在watchFn中catch到错误并继续', function() {
+        scope.aValue = 'a';
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) {
+                throw ('watch error');
+            },
+            function(newVal, oldVal, scope) {}
+        );
+        scope.$watch(
+            function(scope) {
+                return scope.aValue;
+            },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+    });
+
+    it('在listenerFn中catch到错误并能继续', function() {
+        scope.aValue = 'a';
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) {return scope.aValue;},
+            function(newVal, oldVal, scope) {
+                throw 'listener error';
+            }
+        );
+
+        scope.$watch(
+            function(scope) {return scope.aValue;},
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+    });
+
+    it('销毁一个watch', function() {
+        scope.aValue = 'abc';
+        scope.counter = 0;
+
+        var destroyWatch = scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+
+        scope.aValue = 'def';
+        scope.$digest();
+        expect(scope.counter).toBe(2);
+
+        scope.aValue = 'ghi';
+        destroyWatch();          // 调用销毁方法
+        scope.$digest();
+        expect(scope.counter).toBe(2);
+    });
+    
+    it('在digest循环中销毁一个watch', function() {
+        scope.aValue = 'abc';
+        scope.watchCall = [];
+
+        scope.$watch(
+            function(scope) { 
+                scope.watchCall.push('first');
+                return scope.aValue;
+            }
+        );
+
+        var destroyWatch = scope.$watch(
+            function(scope) {
+                scope.watchCall.push('second');
+                destroyWatch();
+                // return scope.aValue;
+            }
+        );
+
+        scope.$watch(
+            function(scope) {
+                scope.watchCall.push('third');
+                return scope.aValue;
+            }
+        );
+
+        scope.$digest();
+        expect(scope.watchCall).toEqual(['first', 'second', 'third', 'first', 'third']);
+    });
+
+    it('允许一个watch删除另一个watch', function() {
+        scope.aValue = 'abc';
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                destroyWatch();
+            }
+        );
+
+        var destroyWatch = scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {}
+        );
+
+        scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        expect(scope.$$watchers.length).toBe(3);
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+    });
+
+    it('在一个watch中移除多个watch', function() {
+        scope.aValue = 'abc';
+        scope.counter = 0;
+        var destroyWatch_1 = scope.$watch(
+            function(scope) {
+                destroyWatch_1();
+                destroyWatch_2();
+            }
+        );
+
+        var destroyWatch_2 = scope.$watch(
+            function(scope) { return scope.aValue; },
+            function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$digest();
+        expect(scope.counter).toBe(0);
+    });
 });

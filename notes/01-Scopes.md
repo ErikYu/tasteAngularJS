@@ -24,6 +24,17 @@
 ## NaNs
 1. NaN !== NaN. Need special deal.
 
+## Handle Exceptions
+1. Errors in watchFn and listenerFn should not stop the code.
+2. Do a `try{} catch(){}`
+
+## Destroying a watch
+1. Remove a watcher by a removal function;
+2. Remove a watcher during a digest cycle: unshift instead of push;
+3. Remove a watcher in another watcher;
+3. Remove several watches in one watch;
+
+# Scope Methods
 ## $eval - Evaluating the Code in the Context of A Scope
 
 ## $apply - Integrating External Code With the Digest Cycle
@@ -34,3 +45,4 @@
     - setTimeOut() 
     - $timeout service, to integrates the funtion to the digest cycle by $apply()
     - $evalAsync, take a function as argument. But still in the current digest cycle
+    

@@ -17,17 +17,28 @@ function initWatchVal() {}
  * $watch方法：观测数据 
  */
 Scope.prototype.$watch = function(watchFn, listenFn, valueEq) {
+    var self = this;
     // watcher：新建的watcher
     var watcher = {
         watchFn: watchFn,
         listenFn: listenFn || function() {},
-        valueEq: !!valueEq,
+        valueEq: !!valueEq,   // undefined转为false
         last: initWatchVal
     };
     // $$watchers：所有的watcher组成的数组
-    this.$$watchers.push(watcher);
+    this.$$watchers.unshift(watcher);
     // 每次watch新值都要将lastDirtyWatch置为null
     this.$$lastDirtyWatch = null;
+
+    // 调用自己销毁该watcher
+    return function() {
+        var index = self.$$watchers.indexOf(watcher);
+        if (index !== -1) {
+            self.$$watchers.splice(index, 1);
+            // 在一个watcher中删除另一个watcher时增加
+            self.$$lastDirtyWatch = null;
+        }
+    };
 };
 
 /**
@@ -36,19 +47,26 @@ Scope.prototype.$watch = function(watchFn, listenFn, valueEq) {
 Scope.prototype.$digestOnce = function() {
     var self = this;
     var newValue, oldValue, dirty;
-    // 对每个watcher检查新旧值
-    _.forEach(this.$$watchers, function(watcher) {
-        newValue = watcher.watchFn(self);
-        oldValue = watcher.last;
-        if(!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-            self.$$lastDirtyWatch = watcher;
-            // 将新值赋给last，供下次改变调用
-            watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue;
-            watcher.listenFn(newValue, oldValue===initWatchVal?newValue:oldValue, self);
-            dirty = true;
-        } else if(self.$$lastDirtyWatch === watcher) {
-            // 当这个watcher此次循环中是clean的，且是上次循环中的最后一个dirty watch
-            return false;
+    // 对每个watcher检查新旧值，如果不一样就调用listenerFn
+    _.forEachRight(this.$$watchers, function(watcher) {
+        // watchFn中的错误信息log，并继续
+        try {
+            if(watcher) {
+                newValue = watcher.watchFn(self);
+                oldValue = watcher.last;
+                if(!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+                    self.$$lastDirtyWatch = watcher;
+                    // 将新值赋给last，供下次改变调用
+                    watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue;
+                    watcher.listenFn(newValue, oldValue===initWatchVal?newValue:oldValue, self);
+                    dirty = true;
+                } else if(self.$$lastDirtyWatch === watcher) {
+                    // 当这个watcher此次循环中是clean的，且是上次循环中的最后一个dirty watch
+                    return false;
+                }
+            }
+        } catch (e) {
+            console.log(e);
         }
     });
     return dirty;
