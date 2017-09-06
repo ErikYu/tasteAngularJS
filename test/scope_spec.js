@@ -517,4 +517,29 @@ describe('applyAsync', function() {
             done();
         }, 50);
     });
+
+    it('执行applyAsync调用一个digest', function(done) {
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) {
+                scope.counter++;
+                return scope.aValue;
+            },
+            function(newVal, oldVal, scope) {}
+        );
+
+        scope.$applyAsync(function(scope) {
+            scope.aValue = 'abc';
+        });
+        scope.$applyAsync(function(scope) {
+            scope.aValue = 'def';
+        });
+        expect(scope.counter).toBe(0);
+
+        setTimeout(function() {
+            expect(scope.counter).toBe(2);
+            done();
+        });
+    });
 });

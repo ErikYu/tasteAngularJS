@@ -45,6 +45,7 @@
     - setTimeOut() 
     - $timeout service, to integrates the funtion to the digest cycle by $apply()
     - $evalAsync, take a function as argument. But still in the current digest cycle
+2. Everytime you want to execute a funtion outside the execute context of another function, #evalAsync shall be used
 
 ## Scheduling $evalAsync from Watch Functions
 1. Schedule a $evalAsync() in a watch function which is not advised but possible;

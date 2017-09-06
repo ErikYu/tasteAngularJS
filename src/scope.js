@@ -8,7 +8,8 @@ function Scope() {
     this.$$watchers = [];                   // 所有的watcher组成的数组
     this.$$lastDirtyWatch = null;           // 一次digestOnce循环的最有一个脏watcher
     this.$$asyncQueue = [];                 // 异步队列
-    this.$$applyAsyncQueue = [];            // 
+    this.$$applyAsyncQueue = [];            // apply的异步队列
+    this.$$applyAsyncId = null;
     this.$$phase = null;
 }
 
@@ -170,8 +171,23 @@ Scope.prototype.$clearPhase = function() {
     this.$$phase = null;
 };
 
-Scope.prototype.$applyAsync = function() {
-
+Scope.prototype.$applyAsync = function(expr) {
+    var self = this;
+    // 将要推迟apply的方法压入
+    self.$$applyAsyncQueue.push(function() {
+        self.$eval(expr);
+    });
+    if (self.$$applyAsyncId === null) {
+        // 检查最后一个setTimeout是不是就要执行
+        self.$$applyAsyncId = setTimeout(function() {
+            self.$apply(function() {
+                while(self.$$applyAsyncQueue.length) {
+                    self.$$applyAsyncQueue.shift()();           // apply队列中的函数从左往右执行
+                }
+                self.$$applyAsyncId = null;
+            });
+        }, 0);
+    }
 };
 
 module.exports = Scope;
