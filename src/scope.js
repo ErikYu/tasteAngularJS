@@ -85,6 +85,15 @@ Scope.prototype.$digest = function() {
     this.$beginPhase('$digest');
     // 开始digest循环初始化$$lastDirtyWatch
     this.$$lastDirtyWatch = null;
+
+    // 执行applyAsync
+    // todo: 搞不懂
+    if(this.$$applyAsyncId) {
+        // 取消异步执行
+        clearTimeout(this.$$applyAsyncId);
+        this.$$flushApplyAsync();
+    }
+
     // 先执行再判断
     do {
         // 如果异步队列中有值，将第一个元素删除并返回第一个值
@@ -180,14 +189,17 @@ Scope.prototype.$applyAsync = function(expr) {
     if (self.$$applyAsyncId === null) {
         // 检查最后一个setTimeout是不是就要执行
         self.$$applyAsyncId = setTimeout(function() {
-            self.$apply(function() {
-                while(self.$$applyAsyncQueue.length) {
-                    self.$$applyAsyncQueue.shift()();           // apply队列中的函数从左往右执行
-                }
-                self.$$applyAsyncId = null;
-            });
+            self.$apply(_.bind(self.$$flushApplyAsync, self));
         }, 0);
     }
+};
+
+// 执行apply异步队列中的函数
+Scope.prototype.$$flushApplyAsync = function() {
+    while(this.$$applyAsyncQueue.length) {
+        this.$$applyAsyncQueue.shift()();
+    }
+    this.$$applyAsyncId = null;
 };
 
 module.exports = Scope;

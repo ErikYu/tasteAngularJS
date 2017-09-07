@@ -58,4 +58,4 @@
 that digest. If there is no digest running, one is started.
 
 ## $applyAsync - Coalescing(合并) $apply invocations
-1. 
+1. It is useful when you need to do $apply(), but know you'll be doing it several times in a shory period of time;
