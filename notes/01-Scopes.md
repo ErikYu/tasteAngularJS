@@ -58,4 +58,16 @@
 that digest. If there is no digest running, one is started.
 
 ## $applyAsync - Coalescing(合并) $apply invocations
-1. It is useful when you need to do $apply(), but know you'll be doing it several times in a shory period of time;
+1. It is useful when you need to do $apply(), but know you'll be doing it several times in a shory period of time; 
+
+## $$postDigest - Running code after a digest
+1. Execute all the function in $$postDigestQueue in the next digest;
+2. Only execute once, like the $evalAsync.
+3. As the postDigest runs after the digest, so if you make changes in $$postDigest, the dirty-checking mechanism won't pick it up. $digest should be called manually;
+
+## Handle Exceptions
+1. 
+
+## evalAsync applyAsync
+1. $evalAsync会在当前digest循环中执行
+2. $applyAsync 让apply()晚一些运行，例如在Angular中发起AJAX请求一般通过$http服务，在得到来自后端的响应之后，它也会触发一轮digest循环。这也就是说，如果同时发起了10个AJAX请求，那么最终会触发10轮digest循环。而如果这10个AJAX请求并不是那么耗时，它们返回的速度很快，这就会造成10轮digest循环依次被触发，而很显然没有必要这么密集地触发digest循环。

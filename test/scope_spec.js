@@ -464,6 +464,9 @@ describe('digest', function() {
     });
 });
 
+/**
+ * $evalAsync测试类
+ */
 describe('evalAsync', function() {
     var scope;
     beforeEach(function() {
@@ -482,6 +485,29 @@ describe('evalAsync', function() {
         );
 
         scope.$evalAsync(function(){});
+        expect(scope.counter).toBe(0);
+        setTimeout(function() {
+            expect(scope.counter).toBe(1);
+            done();
+        }, 50);
+    });
+
+    it('在evalAsync中捕捉错误', function(done) {
+        scope.aValue = "abc";
+        scope.counter = 0;
+
+        scope.$watch(
+            function(scope) {
+                return scope.aValue;
+            }, function(newVal, oldVal, scope) {
+                scope.counter++;
+            }
+        );
+
+        scope.$evalAsync(function() {
+            throw 'Error';
+        });
+
         expect(scope.counter).toBe(0);
         setTimeout(function() {
             expect(scope.counter).toBe(1);
@@ -568,5 +594,79 @@ describe('applyAsync', function() {
             expect(scope.counter).toBe(2);
             done();
         }, 50);
+    });
+
+    it('在applyAsync中捕捉错误', function(done) {
+        scope.$applyAsync(function(scope) {
+            throw 'Error';
+        });
+
+        scope.$applyAsync(function(scope) {
+            throw 'Error';
+        });
+
+        scope.$applyAsync(function() {
+            scope.applied = true;
+        });
+
+        setTimeout(function() {
+            expect(scope.applied).toBe(true);
+            done();
+        }, 50);
+    });
+});
+
+describe('$$postDigest', function() {
+    var scope;
+    beforeEach(function() {
+        scope = new Scope();
+    });
+
+    it('run after each digest', function() {
+        scope.counter = 0;
+        scope.$$postDigest(function() {
+            scope.counter++;
+        });
+
+        expect(scope.counter).toBe(0);
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+        scope.$digest();
+        expect(scope.counter).toBe(1);
+    });
+
+    it('digest循环中不会执行$$postDigest', function() {
+        scope.aValue = "original value";
+
+        scope.$$postDigest(function() {
+            scope.aValue = "changed value";
+        });
+        scope.$watch(
+            function(scope) {
+                return scope.aValue;
+            }, function(newVal, oldVal, scope) {
+                scope.watchedVal = newVal;
+            }
+        );
+        expect(scope.watchedVal).toBe(undefined);
+        scope.$digest();
+        expect(scope.watchedVal).toBe("original value");
+        expect(scope.aValue).toBe("changed value");
+        // 在postDigest改变被watch的值不会立刻出发digest循环
+        // 需要手动触发
+        scope.$digest();
+        expect(scope.watchedVal).toBe("changed value");
+    });
+
+    it('在$$postDigest中捕捉错误', function() {
+        var didRun = false;
+        scope.$$postDigest(function() {
+            throw 'Error';
+        });
+        scope.$$postDigest(function() {
+            didRun = true;
+        });
+        scope.$digest()
+        expect(didRun).toBe(true);
     });
 });

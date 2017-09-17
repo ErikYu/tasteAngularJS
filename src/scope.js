@@ -10,6 +10,7 @@ function Scope() {
     this.$$asyncQueue = [];                 // 异步队列
     this.$$applyAsyncQueue = [];            // apply的异步队列
     this.$$applyAsyncId = null;
+    this.$$postDigestQueue = [];            // 在digest之后执行的方法队列
     this.$$phase = null;
 }
 
@@ -94,13 +95,17 @@ Scope.prototype.$digest = function() {
         this.$$flushApplyAsync();
     }
 
-    // 先执行再判断
+    // 先执行再判断，执行一圈又一圈digestOnce
     do {
         // 如果异步队列中有值，将第一个元素删除并返回第一个值
         // todo: 为什么异步执行
         while (this.$$asyncQueue.length > 0) {
-            var asyncTask = this.$$asyncQueue.shift();
-            asyncTask.scope.$eval(asyncTask.func);
+            try {
+                var asyncTask = this.$$asyncQueue.shift();
+                asyncTask.scope.$eval(asyncTask.func);
+            } catch(e) {
+                console.log(e);
+            }
         }
         dirty = this.$digestOnce();
         // 10次循环后抛出错误
@@ -110,6 +115,15 @@ Scope.prototype.$digest = function() {
         }
     } while (dirty || this.$$asyncQueue.length);
     this.$clearPhase();
+
+    // 执行$$postDigest中的方法
+    while (this.$$postDigestQueue.length) {
+        try {
+            this.$$postDigestQueue.shift()();
+        } catch (e) {
+            console.log(e);
+        }
+    }
 };
 
 /**
@@ -197,9 +211,18 @@ Scope.prototype.$applyAsync = function(expr) {
 // 执行apply异步队列中的函数
 Scope.prototype.$$flushApplyAsync = function() {
     while(this.$$applyAsyncQueue.length) {
-        this.$$applyAsyncQueue.shift()();
+        try{
+            this.$$applyAsyncQueue.shift()();            
+        } catch(e) {
+            console.log(e);
+        }
     }
     this.$$applyAsyncId = null;
+};
+
+// $$postDigest
+Scope.prototype.$$postDigest = function(fn) {
+    this.$$postDigestQueue.push(fn);
 };
 
 module.exports = Scope;
